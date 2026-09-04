@@ -51,3 +51,14 @@ accesible desde el celular (no sirve un archivo local en tu PC).
 
 - 2026-09-04: primer prototipo, generado con Claude, con directorio de
   ejemplo (5 pisos, PB incluida).
+
+## Publicación
+
+La página está publicada en GitHub Pages:
+https://dmontu1980.github.io/portero-rioja1244/
+
+Repositorio: https://github.com/dmontu1980/portero-rioja1244
+
+Para actualizarla: editá `index.html` en esta carpeta y pedile a Claude que
+la vuelva a publicar (hace `git add`, `commit` y `push`, GitHub Pages
+actualiza sola en un minuto).
