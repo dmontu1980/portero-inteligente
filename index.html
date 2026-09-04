@@ -140,6 +140,7 @@
     max-height:52vh;
     overflow-y:auto;
   }
+  .floor-group{display:flex; flex-direction:column; gap:8px;}
   .floor-group .floor-label{
     font-family:'IBM Plex Mono', monospace;
     font-size:11.5px;
@@ -156,33 +157,33 @@
     grid-template-columns:repeat(3, 1fr);
     gap:10px;
   }
+  .units-2{grid-template-columns:repeat(2, 1fr);}
+  .units-solo{display:flex; justify-content:center;}
+  .units-solo .unit{width:min(100%, 160px);}
   .unit{
     background:var(--surface-alt);
     border:1px solid var(--border);
     border-radius:12px;
-    padding:14px 6px 11px;
+    padding:17px 6px;
     display:flex;
-    flex-direction:column;
     align-items:center;
-    gap:5px;
+    justify-content:center;
     cursor:pointer;
     transition:border-color .12s ease, transform .12s ease, background .12s ease;
   }
   .unit:hover{border-color:var(--border-strong); transform:translateY(-1px);}
   .unit:active{transform:translateY(0);}
-  .unit .code{font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:17px;}
-  .unit .who{font-size:11.5px; color:var(--text-muted); text-align:center; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;}
+  .unit .code{font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:18px;}
   .no-results{color:var(--text-muted); font-size:13.5px; padding:10px 2px;}
 
   footer.foot{
     padding:12px 18px 16px;
     border-top:1px solid var(--border);
     display:flex;
-    justify-content:space-between;
+    justify-content:flex-end;
     align-items:center;
     gap:10px;
   }
-  .foot .hint{font-size:11.5px; color:var(--text-muted);}
   .link-btn{
     background:none;
     border:none;
@@ -193,13 +194,6 @@
     padding:4px 2px;
   }
   .link-btn:hover{text-decoration:underline;}
-
-  .note{
-    font-size:11.5px;
-    color:var(--text-muted);
-    text-align:center;
-    padding:0 8px;
-  }
 
   /* Detail sheet */
   .sheet-backdrop{
@@ -248,6 +242,16 @@
     width:30px; height:30px;
     display:flex; align-items:center; justify-content:center;
     cursor:pointer;
+  }
+
+  .pending-msg{
+    margin:0;
+    font-size:13px;
+    color:var(--text-muted);
+    background:var(--surface-alt);
+    border:1px dashed var(--border-strong);
+    border-radius:10px;
+    padding:12px 14px;
   }
 
   .field label{
@@ -339,7 +343,6 @@
     header.top{padding-top:max(22px, calc(env(safe-area-inset-top) + 14px));}
     .directory{max-height:none; flex:1; min-height:0;}
     footer.foot{padding-bottom:max(16px, calc(env(safe-area-inset-bottom) + 10px));}
-    .note{padding:14px 20px 4px;}
   }
 
   html.lock, html.lock body{overflow:hidden; height:100%;}
@@ -363,12 +366,9 @@
     <div class="directory" id="directory"></div>
 
     <footer class="foot">
-      <span class="hint">Datos de ejemplo</span>
       <button class="link-btn" id="showQr" type="button">Ver cartel QR</button>
     </footer>
   </div>
-
-  <p class="note">Prototipo — reemplazá el directorio de ejemplo por los datos reales del edificio en el código.</p>
 </div>
 
 <div class="sheet-backdrop" id="sheetBackdrop">
@@ -384,12 +384,14 @@
       </button>
     </div>
 
-    <div class="field">
+    <p class="pending-msg" id="pendingMsg" hidden>Todavía no se cargó un contacto para esta unidad.</p>
+
+    <div class="field" id="sheetField">
       <label for="visitorName">Tu nombre (para avisarle)</label>
       <input id="visitorName" type="text" placeholder="Ej: repartidor de Correo, Juan…" autocomplete="off">
     </div>
 
-    <div class="actions">
+    <div class="actions" id="sheetActions">
       <a class="btn whatsapp" id="btnWhatsapp" href="#" target="_blank" rel="noopener noreferrer">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.39 1.26 4.81L2 22l5.41-1.42a9.87 9.87 0 0 0 4.63 1.18h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.13-2.9-7C17.17 3.03 14.69 2 12.04 2Zm5.8 14.14c-.24.68-1.4 1.32-1.93 1.4-.5.08-1.12.11-1.8-.11-.42-.13-.96-.31-1.65-.6-2.9-1.25-4.79-4.17-4.94-4.36-.14-.2-1.18-1.57-1.18-3 0-1.42.75-2.12 1.02-2.41.26-.29.57-.36.76-.36.19 0 .38 0 .55.01.18.01.41-.07.64.49.24.58.81 2 .88 2.15.07.15.12.32.02.51-.09.19-.14.31-.28.48-.14.16-.29.36-.42.48-.14.13-.28.28-.12.55.16.27.72 1.19 1.55 1.93 1.06.95 1.96 1.24 2.23 1.38.27.14.43.12.59-.07.16-.2.68-.79.86-1.06.18-.27.36-.22.6-.13.25.09 1.57.74 1.84.87.27.13.45.2.51.31.07.11.07.63-.17 1.31Z"/></svg>
         Enviar WhatsApp
@@ -418,43 +420,39 @@
 
 <script>
 (function(){
-  // ---- Directorio de ejemplo -------------------------------------------
-  // Reemplazá esta lista por los pisos/deptos reales del edificio.
-  // whatsapp: número completo con código de país, sin +, sin espacios (ej: 5491122334455)
-  // telefono: número tal cual lo marcaría un teléfono (ej: +5491122334455)
+  // ---- Directorio del edificio -------------------------------------------
+  // codigo: identificador de la unidad (letra de depto, o '' si el piso tiene una sola unidad).
+  // whatsapp: número completo con código de país, sin +, sin espacios (ej: 5491122334455). Dejalo '' si todavía no se cargó.
+  // telefono: número tal cual lo marcaría un teléfono (ej: +5491122334455). Dejalo '' si todavía no se cargó.
+  function unidadVacia(codigo){ return { codigo, nombre:'', whatsapp:'', telefono:'' }; }
+
   const directorio = [
-    { piso: 'PB', unidades: [
-      { depto:'A', nombre:'David', whatsapp:'5493416151319', telefono:'+5493416151319' },
-      { depto:'B', nombre:'Luli', whatsapp:'5493416807595', telefono:'+5493416807595' },
+    { piso:'PB', label:'Planta Baja', unidades: [
+      { codigo:'', nombre:'Portería', whatsapp:'5493416151319', telefono:'+5493416151319' },
     ]},
-    { piso: '1°', unidades: [
-      { depto:'A', nombre:'L. Gómez', whatsapp:'5491122331001', telefono:'+5491122331001' },
-      { depto:'B', nombre:'R. Suárez', whatsapp:'5491122331002', telefono:'+5491122331002' },
-      { depto:'C', nombre:'Familia Paz', whatsapp:'5491122331003', telefono:'+5491122331003' },
-      { depto:'D', nombre:'J. Alonso', whatsapp:'5491122331004', telefono:'+5491122331004' },
-    ]},
-    { piso: '2°', unidades: [
-      { depto:'A', nombre:'C. Ibáñez', whatsapp:'5491122332001', telefono:'+5491122332001' },
-      { depto:'B', nombre:'N. Duarte', whatsapp:'5491122332002', telefono:'+5491122332002' },
-      { depto:'C', nombre:'S. Molina', whatsapp:'5491122332003', telefono:'+5491122332003' },
-      { depto:'D', nombre:'P. Ríos', whatsapp:'5491122332004', telefono:'+5491122332004' },
-    ]},
-    { piso: '3°', unidades: [
-      { depto:'A', nombre:'V. Acosta', whatsapp:'5491122333001', telefono:'+5491122333001' },
-      { depto:'B', nombre:'E. Rojas', whatsapp:'5491122333002', telefono:'+5491122333002' },
-      { depto:'C', nombre:'Familia Núñez', whatsapp:'5491122333003', telefono:'+5491122333003' },
-      { depto:'D', nombre:'H. Cabrera', whatsapp:'5491122333004', telefono:'+5491122333004' },
-    ]},
-    { piso: '4°', unidades: [
-      { depto:'A', nombre:'D. Vega', whatsapp:'5491122334001', telefono:'+5491122334001' },
-      { depto:'B', nombre:'T. Ortiz', whatsapp:'5491122334002', telefono:'+5491122334002' },
-      { depto:'C', nombre:'Administración', whatsapp:'5491122334003', telefono:'+5491122334003' },
-      { depto:'D', nombre:'G. Peralta', whatsapp:'5491122334004', telefono:'+5491122334004' },
+    { piso:'EP', label:'Entrepiso', unidades: [
+      unidadVacia(''),
     ]},
   ];
+  for(let piso=1; piso<=10; piso++){
+    directorio.push({
+      piso: piso+'°',
+      label: 'Piso ' + piso,
+      unidades: ['A','B','C','D','E'].map(unidadVacia),
+    });
+  }
 
   const directoryEl = document.getElementById('directory');
   const searchEl = document.getElementById('search');
+
+  function unitButton(floor, u){
+    const btn = document.createElement('button');
+    btn.className='unit';
+    btn.type='button';
+    btn.innerHTML = '<span class="code">'+floor.piso+u.codigo+'</span>';
+    btn.addEventListener('click', ()=>openSheet(floor, u));
+    return btn;
+  }
 
   function render(filter){
     const q = (filter||'').trim().toLowerCase();
@@ -463,7 +461,7 @@
     directorio.forEach(floor=>{
       const matches = floor.unidades.filter(u=>{
         if(!q) return true;
-        return (floor.piso+u.depto).toLowerCase().includes(q) || u.nombre.toLowerCase().includes(q);
+        return (floor.piso+u.codigo).toLowerCase().includes(q) || u.nombre.toLowerCase().includes(q);
       });
       if(matches.length===0) return;
       any = true;
@@ -471,19 +469,27 @@
       group.className='floor-group';
       const label = document.createElement('div');
       label.className='floor-label';
-      label.textContent = 'Piso ' + floor.piso;
+      label.textContent = floor.label;
       group.appendChild(label);
-      const grid = document.createElement('div');
-      grid.className='units';
-      matches.forEach(u=>{
-        const btn = document.createElement('button');
-        btn.className='unit';
-        btn.type='button';
-        btn.innerHTML = '<span class="code">'+floor.piso+u.depto+'</span><span class="who">'+u.nombre+'</span>';
-        btn.addEventListener('click', ()=>openSheet(floor, u));
-        grid.appendChild(btn);
-      });
-      group.appendChild(grid);
+
+      if(matches.length<=2){
+        const row = document.createElement('div');
+        row.className = matches.length===1 ? 'units units-solo' : 'units units-2';
+        matches.forEach(u=>row.appendChild(unitButton(floor, u)));
+        group.appendChild(row);
+      } else {
+        // Fila 1: unidades de frente (las primeras 2). Fila 2: contrafrente (el resto).
+        const frente = document.createElement('div');
+        frente.className = 'units units-2';
+        matches.slice(0,2).forEach(u=>frente.appendChild(unitButton(floor, u)));
+        group.appendChild(frente);
+
+        const contra = document.createElement('div');
+        contra.className = 'units';
+        matches.slice(2).forEach(u=>contra.appendChild(unitButton(floor, u)));
+        group.appendChild(contra);
+      }
+
       directoryEl.appendChild(group);
     });
     if(!any){
@@ -498,6 +504,9 @@
   const sheetAvatar = document.getElementById('sheetAvatar');
   const sheetId = document.getElementById('sheetId');
   const sheetTitle = document.getElementById('sheetTitle');
+  const pendingMsg = document.getElementById('pendingMsg');
+  const sheetField = document.getElementById('sheetField');
+  const sheetActions = document.getElementById('sheetActions');
   const visitorName = document.getElementById('visitorName');
   const btnWhatsapp = document.getElementById('btnWhatsapp');
   const btnCall = document.getElementById('btnCall');
@@ -507,21 +516,26 @@
     if(!current) return;
     const name = visitorName.value.trim();
     const who = name ? name : 'un visitante';
-    const msg = 'Hola! Soy ' + who + ' y estoy en la puerta del edificio (Piso ' + current.floor.piso + ', Depto ' + current.u.depto + '). ¿Podés iniciar una videollamada de WhatsApp para verme y abrirme la puerta?';
+    const ubicacion = 'Piso ' + current.floor.piso + (current.u.codigo ? ', Depto ' + current.u.codigo : '');
+    const msg = 'Hola! Soy ' + who + ' y estoy en la puerta del edificio (' + ubicacion + '). ¿Podés iniciar una videollamada de WhatsApp para verme y abrirme la puerta?';
     btnWhatsapp.href = 'https://wa.me/' + current.u.whatsapp + '?text=' + encodeURIComponent(msg);
     btnCall.href = 'tel:' + current.u.telefono;
   }
 
   function openSheet(floor, u){
     current = {floor, u};
-    sheetAvatar.textContent = u.nombre.trim().charAt(0).toUpperCase();
-    sheetId.textContent = 'Piso ' + floor.piso + ' · Depto ' + u.depto;
-    sheetTitle.textContent = u.nombre;
+    const configurada = !!(u.whatsapp || u.telefono);
+    sheetAvatar.textContent = (u.nombre || floor.piso + u.codigo).trim().charAt(0).toUpperCase();
+    sheetId.textContent = 'Piso ' + floor.piso + (u.codigo ? ' · Depto ' + u.codigo : '');
+    sheetTitle.textContent = u.nombre || (floor.label + (u.codigo ? ' ' + u.codigo : ''));
+    pendingMsg.hidden = configurada;
+    sheetField.hidden = !configurada;
+    sheetActions.hidden = !configurada;
     visitorName.value = '';
-    updateLinks();
+    if(configurada) updateLinks();
     sheetBackdrop.classList.add('open');
     document.documentElement.classList.add('lock');
-    setTimeout(()=>visitorName.focus(), 150);
+    if(configurada) setTimeout(()=>visitorName.focus(), 150);
   }
   function closeSheet(){
     sheetBackdrop.classList.remove('open');
