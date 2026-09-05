@@ -6,6 +6,9 @@
 <meta http-equiv="Expires" content="0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 <style>
   :root{
     --bg:#eef0f4;
@@ -460,29 +463,11 @@
 
 <script>
 (function(){
-  // ---- Directorio del edificio -------------------------------------------
-  // codigo: identificador de la unidad (letra de depto, o '' si el piso tiene una sola unidad).
-  // contactos: lista de personas para contactar en esa unidad (puede ir vacía [] si todavía no se cargó ninguna).
+  // ---- Directorio del edificio (se carga desde Firestore) ----------------
+  // Cada unidad tiene: piso, label (nombre del piso), codigo (letra o ''), orden, contactos.
+  // contactos: lista de personas para contactar en esa unidad (puede venir vacía []).
   //   Cada contacto: { whatsapp, telefono }
-  //   whatsapp: número completo con código de país, sin +, sin espacios (ej: 5491122334455).
-  //   telefono: número tal cual lo marcaría un teléfono (ej: +5491122334455).
-  function unidadVacia(codigo){ return { codigo, contactos: [] }; }
-
-  const directorio = [
-    { piso:'PB', label:'Planta Baja', unidades: [
-      { codigo:'', contactos: [ { whatsapp:'5493416151319', telefono:'+5493416151319' } ] },
-    ]},
-    { piso:'EP', label:'Entrepiso', unidades: [
-      unidadVacia(''),
-    ]},
-  ];
-  for(let piso=1; piso<=10; piso++){
-    directorio.push({
-      piso: piso+'°',
-      label: 'Piso ' + piso,
-      unidades: ['A','B','C','D','E'].map(unidadVacia),
-    });
-  }
+  let directorio = [];
 
   const directoryEl = document.getElementById('directory');
   const searchEl = document.getElementById('search');
@@ -538,8 +523,25 @@
       directoryEl.innerHTML = '<div class="no-results">Sin resultados para "'+filter+'".</div>';
     }
   }
-  render('');
-  searchEl.addEventListener('input', e=>render(e.target.value));
+  searchEl.addEventListener('input', e=>render(searchEl.value));
+
+  // ---- Carga del directorio desde Firestore -------------------------
+  directoryEl.innerHTML = '<div class="no-results">Cargando directorio…</div>';
+  const db = firebase.firestore();
+  db.collection('unidades').get().then(snap=>{
+    const porPiso = {}; // piso -> {label, pisoOrden, unidades:[]}
+    snap.forEach(doc=>{
+      const d = doc.data();
+      if(!porPiso[d.piso]) porPiso[d.piso] = { piso:d.piso, label:d.label, pisoOrden:d.pisoOrden, unidades:[] };
+      porPiso[d.piso].unidades.push({ codigo:d.codigo||'', contactos:d.contactos||[] });
+    });
+    directorio = Object.values(porPiso).sort((a,b)=>a.pisoOrden-b.pisoOrden);
+    directorio.forEach(floor=>floor.unidades.sort((a,b)=>a.codigo.localeCompare(b.codigo)));
+    render(searchEl.value);
+  }).catch(err=>{
+    console.error('Error cargando directorio de Firestore:', err);
+    directoryEl.innerHTML = '<div class="no-results">No se pudo cargar el directorio. Revisá tu conexión y volvé a intentar.</div>';
+  });
 
   // ---- Detail sheet -------------------------------------------------
   const sheetBackdrop = document.getElementById('sheetBackdrop');
