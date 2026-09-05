@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Colección vieja (una sola, previa al modelo multi-edificio).
+    // Se deja de lectura pública por compatibilidad, pero ya no se escribe ahí.
+    match /unidades/{unidadId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Cada admin sabe a qué edificio pertenece. Se puede crear una sola vez
+    // (autoasignación en el primer login); para reasignar a alguien a otro
+    // edificio hay que editar el documento a mano desde la consola.
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update, delete: if false;
+    }
+
+    match /edificios/{edificioId} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.edificioId == edificioId;
+
+      match /unidades/{unidadId} {
+        allow read: if true;
+        allow write: if request.auth != null &&
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.edificioId == edificioId;
+      }
+    }
+  }
+}

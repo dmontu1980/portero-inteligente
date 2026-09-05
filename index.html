@@ -1,6 +1,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Rioja 1244 - Edificio Chicago I</title>
+<title id="pageTitle">Portero inteligente</title>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -391,8 +391,8 @@
   <div class="plate">
     <header class="top">
       <span class="eyebrow">Portero inteligente</span>
-      <h1>Rioja 1244 - Edificio Chicago I</h1>
-      <span class="addr">Elegí un departamento para contactarlo</span>
+      <h1 id="buildingName">Cargando…</h1>
+      <span class="addr" id="buildingAddr">Elegí un departamento para contactarlo</span>
     </header>
 
     <div class="search-wrap">
@@ -450,7 +450,7 @@
 <div class="qr-backdrop" id="qrBackdrop">
   <div class="qr-card">
     <span class="eyebrow" style="color:var(--accent)">Timbre Smart</span>
-    <h3>Rioja 1244 - Edificio Chicago I</h3>
+    <h3 id="qrBuildingName">Cargando…</h3>
     <span class="qr-caption">Cartel para la entrada</span>
     <div id="qrcode"></div>
     <div class="qr-steps">Escaneá el QR<br>Seleccioná el departamento<br>Esperá a ser atendido</div>
@@ -525,19 +525,49 @@
   }
   searchEl.addEventListener('input', e=>render(searchEl.value));
 
-  // ---- Carga del directorio desde Firestore -------------------------
+  // ---- Edificio a mostrar (multi-edificio vía ?edificio=) ------------
+  // Si el link no trae el parámetro (QR viejo, o entrada directa), se usa
+  // rioja1244 por defecto para no romper el cartel ya impreso.
+  const params = new URLSearchParams(window.location.search);
+  const edificioId = params.get('edificio') || 'rioja1244';
+
+  const buildingNameEl = document.getElementById('buildingName');
+  const buildingAddrEl = document.getElementById('buildingAddr');
+  const qrBuildingNameEl = document.getElementById('qrBuildingName');
+  const pageTitleEl = document.getElementById('pageTitle');
+
+  // ---- Carga del edificio + directorio desde Firestore ---------------
   directoryEl.innerHTML = '<div class="no-results">Cargando directorio…</div>';
   const db = firebase.firestore();
-  db.collection('unidades').get().then(snap=>{
-    const porPiso = {}; // piso -> {label, pisoOrden, unidades:[]}
-    snap.forEach(doc=>{
-      const d = doc.data();
-      if(!porPiso[d.piso]) porPiso[d.piso] = { piso:d.piso, label:d.label, pisoOrden:d.pisoOrden, unidades:[] };
-      porPiso[d.piso].unidades.push({ codigo:d.codigo||'', contactos:d.contactos||[] });
+  const edificioRef = db.collection('edificios').doc(edificioId);
+
+  edificioRef.get().then(edSnap=>{
+    if(!edSnap.exists){
+      buildingNameEl.textContent = 'Edificio no encontrado';
+      buildingAddrEl.textContent = 'Revisá el link del cartel QR.';
+      qrBuildingNameEl.textContent = 'Edificio no encontrado';
+      directoryEl.innerHTML = '<div class="no-results">No encontramos este edificio. Consultá con la administración.</div>';
+      return;
+    }
+    const ed = edSnap.data();
+    const nombre = ed.nombre || edificioId;
+    buildingNameEl.textContent = nombre;
+    buildingAddrEl.textContent = ed.direccion || 'Elegí un departamento para contactarlo';
+    qrBuildingNameEl.textContent = nombre;
+    pageTitleEl.textContent = nombre;
+    document.title = nombre;
+
+    return edificioRef.collection('unidades').get().then(snap=>{
+      const porPiso = {}; // piso -> {label, pisoOrden, unidades:[]}
+      snap.forEach(doc=>{
+        const d = doc.data();
+        if(!porPiso[d.piso]) porPiso[d.piso] = { piso:d.piso, label:d.label, pisoOrden:d.pisoOrden, unidades:[] };
+        porPiso[d.piso].unidades.push({ codigo:d.codigo||'', contactos:d.contactos||[] });
+      });
+      directorio = Object.values(porPiso).sort((a,b)=>a.pisoOrden-b.pisoOrden);
+      directorio.forEach(floor=>floor.unidades.sort((a,b)=>a.codigo.localeCompare(b.codigo)));
+      render(searchEl.value);
     });
-    directorio = Object.values(porPiso).sort((a,b)=>a.pisoOrden-b.pisoOrden);
-    directorio.forEach(floor=>floor.unidades.sort((a,b)=>a.codigo.localeCompare(b.codigo)));
-    render(searchEl.value);
   }).catch(err=>{
     console.error('Error cargando directorio de Firestore:', err);
     directoryEl.innerHTML = '<div class="no-results">No se pudo cargar el directorio. Revisá tu conexión y volvé a intentar.</div>';
