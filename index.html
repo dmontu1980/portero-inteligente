@@ -255,6 +255,39 @@
   .pending-msg strong{display:block; font-size:15px; color:var(--text); margin-bottom:4px;}
   .pending-msg span{font-size:12.5px; color:var(--text-muted);}
 
+  .contact-list{display:flex; flex-direction:column; gap:8px;}
+  .contact-btn{
+    display:flex; align-items:center; gap:12px;
+    padding:13px 14px;
+    border-radius:12px;
+    border:1px solid var(--border);
+    background:var(--surface-alt);
+    cursor:pointer;
+    text-align:left;
+    font-family:inherit;
+  }
+  .contact-btn:hover{border-color:var(--border-strong);}
+  .contact-btn .num{
+    width:28px; height:28px; border-radius:50%; flex:none;
+    background:color-mix(in srgb, var(--accent) 16%, var(--surface));
+    color:var(--accent);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:13px;
+  }
+  .contact-btn .label{font-size:14.5px; font-weight:600;}
+  .contact-btn svg{margin-left:auto; flex:none; color:var(--text-muted);}
+
+  .back-link{
+    align-self:flex-start;
+    background:none; border:none;
+    color:var(--accent);
+    font-size:12.5px; font-weight:600;
+    cursor:pointer;
+    padding:2px;
+    margin-top:-8px;
+  }
+  .back-link:hover{text-decoration:underline;}
+
   [hidden]{display:none !important;}
 
   .field label{
@@ -362,7 +395,7 @@
     <div class="search-wrap">
       <div class="search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="search" type="text" inputmode="search" placeholder="Buscar por depto o apellido…" autocomplete="off">
+        <input id="search" type="text" inputmode="search" placeholder="Buscar por piso o depto…" autocomplete="off">
       </div>
     </div>
 
@@ -388,6 +421,10 @@
     </div>
 
     <p class="pending-msg" id="pendingMsg" hidden><strong>Unidad no configurada</strong><span>Todavía no se cargó un contacto para esta unidad.</span></p>
+
+    <div class="contact-list" id="contactList" hidden></div>
+
+    <button class="back-link" id="backToList" type="button" hidden>‹ Elegir otro contacto</button>
 
     <div class="field" id="sheetField">
       <label for="visitorName">Tu nombre (para avisarle)</label>
@@ -425,13 +462,15 @@
 (function(){
   // ---- Directorio del edificio -------------------------------------------
   // codigo: identificador de la unidad (letra de depto, o '' si el piso tiene una sola unidad).
-  // whatsapp: número completo con código de país, sin +, sin espacios (ej: 5491122334455). Dejalo '' si todavía no se cargó.
-  // telefono: número tal cual lo marcaría un teléfono (ej: +5491122334455). Dejalo '' si todavía no se cargó.
-  function unidadVacia(codigo){ return { codigo, nombre:'', whatsapp:'', telefono:'' }; }
+  // contactos: lista de personas para contactar en esa unidad (puede ir vacía [] si todavía no se cargó ninguna).
+  //   Cada contacto: { whatsapp, telefono }
+  //   whatsapp: número completo con código de país, sin +, sin espacios (ej: 5491122334455).
+  //   telefono: número tal cual lo marcaría un teléfono (ej: +5491122334455).
+  function unidadVacia(codigo){ return { codigo, contactos: [] }; }
 
   const directorio = [
     { piso:'PB', label:'Planta Baja', unidades: [
-      { codigo:'', nombre:'Portería', whatsapp:'5493416151319', telefono:'+5493416151319' },
+      { codigo:'', contactos: [ { whatsapp:'5493416151319', telefono:'+5493416151319' } ] },
     ]},
     { piso:'EP', label:'Entrepiso', unidades: [
       unidadVacia(''),
@@ -464,7 +503,7 @@
     directorio.forEach(floor=>{
       const matches = floor.unidades.filter(u=>{
         if(!q) return true;
-        return (floor.piso+u.codigo).toLowerCase().includes(q) || u.nombre.toLowerCase().includes(q);
+        return (floor.piso+u.codigo).toLowerCase().includes(q);
       });
       if(matches.length===0) return;
       any = true;
@@ -508,42 +547,80 @@
   const sheetId = document.getElementById('sheetId');
   const sheetTitle = document.getElementById('sheetTitle');
   const pendingMsg = document.getElementById('pendingMsg');
+  const contactList = document.getElementById('contactList');
+  const backToList = document.getElementById('backToList');
   const sheetField = document.getElementById('sheetField');
   const sheetActions = document.getElementById('sheetActions');
   const visitorName = document.getElementById('visitorName');
   const btnWhatsapp = document.getElementById('btnWhatsapp');
   const btnCall = document.getElementById('btnCall');
-  let current = null;
+  let current = null; // {floor, u, contactIndex}
+
+  const personIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
 
   function updateLinks(){
-    if(!current) return;
+    if(!current || current.contactIndex==null) return;
+    const contacto = current.u.contactos[current.contactIndex];
     const name = visitorName.value.trim();
     const who = name ? name : 'un visitante';
     const ubicacion = 'Piso ' + current.floor.piso + (current.u.codigo ? ', Depto ' + current.u.codigo : '');
     const msg = 'Hola! Soy ' + who + ' y estoy en la puerta del edificio (' + ubicacion + '). ¿Podés iniciar una videollamada de WhatsApp para verme y abrirme la puerta?';
-    btnWhatsapp.href = 'https://wa.me/' + current.u.whatsapp + '?text=' + encodeURIComponent(msg);
-    btnCall.href = 'tel:' + current.u.telefono;
+    btnWhatsapp.href = 'https://wa.me/' + contacto.whatsapp + '?text=' + encodeURIComponent(msg);
+    btnCall.href = 'tel:' + contacto.telefono;
+  }
+
+  function showContactDetail(index){
+    current.contactIndex = index;
+    const multiple = current.u.contactos.length > 1;
+    sheetTitle.textContent = multiple ? 'Contacto ' + (index+1) : 'Contactar';
+    contactList.hidden = true;
+    backToList.hidden = !multiple;
+    sheetField.hidden = false;
+    sheetActions.hidden = false;
+    visitorName.value = '';
+    updateLinks();
+    setTimeout(()=>visitorName.focus(), 150);
+  }
+
+  function showContactPicker(){
+    current.contactIndex = null;
+    sheetTitle.textContent = 'Elegí un contacto';
+    backToList.hidden = true;
+    sheetField.hidden = true;
+    sheetActions.hidden = true;
+    contactList.innerHTML = '';
+    current.u.contactos.forEach((c, i)=>{
+      const b = document.createElement('button');
+      b.className = 'contact-btn';
+      b.type = 'button';
+      b.innerHTML = '<span class="num">'+(i+1)+'</span><span class="label">Contacto '+(i+1)+'</span>'+personIcon;
+      b.addEventListener('click', ()=>showContactDetail(i));
+      contactList.appendChild(b);
+    });
+    contactList.hidden = false;
   }
 
   function openSheet(floor, u){
-    current = {floor, u};
-    const configurada = !!(u.whatsapp || u.telefono);
-    sheetAvatar.textContent = (u.nombre || floor.piso + u.codigo).trim().charAt(0).toUpperCase();
+    current = {floor, u, contactIndex:null};
+    const total = u.contactos.length;
+    sheetAvatar.textContent = (floor.piso + u.codigo).trim().charAt(0).toUpperCase();
     sheetId.textContent = 'Piso ' + floor.piso + (u.codigo ? ' · Depto ' + u.codigo : '');
-    sheetTitle.textContent = u.nombre || (floor.label + (u.codigo ? ' ' + u.codigo : ''));
-    pendingMsg.hidden = configurada;
-    sheetField.hidden = !configurada;
-    sheetActions.hidden = !configurada;
-    visitorName.value = '';
-    if(configurada){
-      updateLinks();
-    } else {
+    pendingMsg.hidden = total > 0;
+    contactList.hidden = true;
+    backToList.hidden = true;
+    sheetField.hidden = true;
+    sheetActions.hidden = true;
+    if(total === 0){
+      sheetTitle.textContent = 'Unidad';
       btnWhatsapp.href = '#';
       btnCall.href = '#';
+    } else if(total === 1){
+      showContactDetail(0);
+    } else {
+      showContactPicker();
     }
     sheetBackdrop.classList.add('open');
     document.documentElement.classList.add('lock');
-    if(configurada) setTimeout(()=>visitorName.focus(), 150);
   }
   function closeSheet(){
     sheetBackdrop.classList.remove('open');
@@ -552,6 +629,7 @@
   }
   document.getElementById('closeSheet').addEventListener('click', closeSheet);
   sheetBackdrop.addEventListener('click', e=>{ if(e.target===sheetBackdrop) closeSheet(); });
+  backToList.addEventListener('click', showContactPicker);
   visitorName.addEventListener('input', updateLinks);
 
   // ---- QR / print panel ----------------------------------------------
