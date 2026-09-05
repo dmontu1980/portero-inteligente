@@ -149,6 +149,9 @@
 
   <div class="actions-row">
     <button class="btn btn-ghost" id="seedBtn" type="button">Inicializar estructura del edificio</button>
+    <button class="btn btn-ghost" id="downloadTemplateBtn" type="button">Descargar plantilla (CSV)</button>
+    <button class="btn btn-primary" id="importBtn" type="button">Importar planilla (CSV)</button>
+    <input type="file" id="importFile" accept=".csv,text/csv" hidden>
     <a class="btn btn-ghost" href="./" target="_blank" style="text-decoration:none; display:inline-flex; align-items:center;">Ver app pública ↗</a>
   </div>
 
@@ -186,6 +189,12 @@
     floorDefs.push({ piso:p+'°', label:'Piso '+p, codigos:['A','B','C','D','E'] });
   }
   function docId(piso, codigo){ return piso.replace('°','') + codigo; }
+
+  // Piso "plano" (sin °, como se escribe en la planilla) -> datos del piso.
+  const floorLookup = {};
+  floorDefs.forEach((f,i)=>{
+    floorLookup[f.piso.replace('°','')] = { storedPiso:f.piso, label:f.label, pisoOrden:i*10 };
+  });
 
   // ---- Login ----
   const loginScreen = document.getElementById('loginScreen');
@@ -238,6 +247,98 @@
     }
     statusMsg.textContent = 'Listo — unidades creadas: ' + creadas + ', ya existían: ' + existentes + '.';
     loadUnidades();
+  });
+
+  // ---- Descargar plantilla CSV (una fila por unidad, lista para completar) ----
+  document.getElementById('downloadTemplateBtn').addEventListener('click', ()=>{
+    const lines = ['piso,codigo,whatsapp,telefono'];
+    floorDefs.forEach(f=>{
+      const plainPiso = f.piso.replace('°','');
+      f.codigos.forEach(codigo=>{
+        lines.push([plainPiso, codigo, '', ''].join(','));
+      });
+    });
+    const blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'plantilla-unidades-rioja1244.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  // ---- Importar planilla CSV (carga masiva) ----
+  function parseCSV(text){
+    return text.split(/\r?\n/)
+      .map(l=>l.trim())
+      .filter(l=>l.length>0)
+      .map(l=>l.split(',').map(c=>c.trim()));
+  }
+
+  document.getElementById('importBtn').addEventListener('click', ()=>{
+    document.getElementById('importFile').click();
+  });
+
+  document.getElementById('importFile').addEventListener('change', e=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async ()=>{
+      const statusMsg = document.getElementById('statusMsg');
+      const rows = parseCSV(reader.result);
+      rows.shift(); // saca el encabezado
+
+      const grupos = {}; // "piso|codigo" -> { piso, codigo, contactos:[] }
+      const pisosDesconocidos = new Set();
+
+      rows.forEach(cols=>{
+        const [piso, codigo, whatsapp, telefono] = cols;
+        if(!piso) return; // fila vacía o mal formada
+        if(!floorLookup[piso]){ pisosDesconocidos.add(piso); return; }
+        const key = piso + '|' + (codigo||'');
+        if(!grupos[key]) grupos[key] = { piso, codigo:codigo||'', contactos:[] };
+        if(whatsapp || telefono) grupos[key].contactos.push({ whatsapp:whatsapp||'', telefono:telefono||'' });
+      });
+
+      const claves = Object.keys(grupos);
+      if(claves.length===0){
+        statusMsg.textContent = 'No se encontraron filas válidas en el archivo.';
+        return;
+      }
+      if(pisosDesconocidos.size>0){
+        const seguir = confirm('Hay valores de "piso" que no reconozco: ' + Array.from(pisosDesconocidos).join(', ') + '.\nEsas filas se van a ignorar. ¿Continuar con el resto (' + claves.length + ' unidades)?');
+        if(!seguir) return;
+      } else {
+        const seguir = confirm('Se van a actualizar ' + claves.length + ' unidades con los datos del archivo. ¿Confirmar?');
+        if(!seguir) return;
+      }
+
+      statusMsg.textContent = 'Importando…';
+      const batch = db.batch();
+      claves.forEach(key=>{
+        const g = grupos[key];
+        const info = floorLookup[g.piso];
+        const ref = db.collection('unidades').doc(docId(info.storedPiso, g.codigo));
+        batch.set(ref, {
+          piso: info.storedPiso,
+          label: info.label,
+          pisoOrden: info.pisoOrden,
+          codigo: g.codigo,
+          contactos: g.contactos,
+        }, { merge:true });
+      });
+      try{
+        await batch.commit();
+        statusMsg.textContent = 'Importación lista: ' + claves.length + ' unidades actualizadas.';
+      } catch(err){
+        statusMsg.textContent = 'Error al importar: ' + err.message;
+      }
+      loadUnidades();
+      e.target.value = '';
+    };
+    reader.readAsText(file);
   });
 
   // ---- Cargar y listar unidades ----
