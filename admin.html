@@ -372,7 +372,11 @@
       setTimeout(()=>window.location.reload(), 800);
     } catch(err){
       console.error(err);
-      msgEl.textContent = 'Error al migrar: ' + err.message;
+      if(err.code === 'permission-denied'){
+        msgEl.textContent = 'Tu usuario ya tiene una asignación previa guardada (probablemente de un intento anterior). Para solucionarlo, alguien con acceso a Firestore tiene que borrar el documento de tu usuario en la colección "admins" (se busca por tu UID, en Authentication → Users) y volver a intentar.';
+      } else {
+        msgEl.textContent = 'Error al migrar: ' + err.message;
+      }
     }
   });
 
@@ -475,7 +479,11 @@
       window.location.reload();
     } catch(err){
       console.error(err);
-      errEl.textContent = 'Error al crear el edificio: ' + err.message;
+      if(err.code === 'permission-denied'){
+        errEl.textContent = 'Tu usuario ya tiene una asignación previa guardada (probablemente de un intento anterior que no se completó). Para solucionarlo, alguien con acceso a Firestore tiene que borrar el documento de tu usuario en la colección "admins" (se busca por tu UID, en Authentication → Users) y volver a intentar.';
+      } else {
+        errEl.textContent = 'Error al crear el edificio: ' + err.message;
+      }
       errEl.hidden = false;
     }
   });
