@@ -635,15 +635,18 @@
   function openSheet(floor, u){
     current = {floor, u, contactIndex:null};
     const total = u.contactos.length;
+    const ubicacion = 'Piso ' + floor.piso + (u.codigo ? ' · Depto ' + u.codigo : '');
     sheetAvatar.textContent = (floor.piso + u.codigo).trim().charAt(0).toUpperCase();
-    sheetId.textContent = 'Piso ' + floor.piso + (u.codigo ? ' · Depto ' + u.codigo : '');
+    sheetId.textContent = ubicacion;
+    sheetId.hidden = false;
     pendingMsg.hidden = total > 0;
     contactList.hidden = true;
     backToList.hidden = true;
     sheetField.hidden = true;
     sheetActions.hidden = true;
     if(total === 0){
-      sheetTitle.textContent = 'Unidad';
+      sheetId.hidden = true;
+      sheetTitle.textContent = ubicacion;
       btnWhatsapp.href = '#';
       btnCall.href = '#';
     } else if(total === 1){
