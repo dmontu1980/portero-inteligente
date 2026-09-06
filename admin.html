@@ -145,17 +145,18 @@
       <h1>Tu usuario no tiene un edificio asignado</h1>
       <div class="sub" id="onboardWho"></div>
     </div>
-    <p class="status-msg" id="onboardMsg">Si administrás Rioja 1244 y todavía no migraste los datos a la nueva estructura, podés hacerlo con este botón (se hace una sola vez).</p>
-    <button class="btn btn-primary" id="migrateBtn" type="button">Migrar Rioja 1244 y asignarme este edificio</button>
-
-    <hr style="border:none; border-top:1px solid var(--border); margin:8px 0;">
+    <div id="migrateSection">
+      <p class="status-msg" id="onboardMsg">Si administrás Rioja 1244 y todavía no migraste los datos a la nueva estructura, podés hacerlo con este botón (se hace una sola vez).</p>
+      <button class="btn btn-primary" id="migrateBtn" type="button">Migrar Rioja 1244 y asignarme este edificio</button>
+      <hr style="border:none; border-top:1px solid var(--border); margin:8px 0;">
+    </div>
 
     <div>
       <h1 style="font-size:16px;">O crear un edificio nuevo</h1>
       <div class="sub" style="margin-top:2px;">Vas a quedar asignado como administrador de ese edificio.</div>
     </div>
     <div class="field">
-      <label for="newEdId">ID del edificio (sin espacios ni acentos, ej: ricardone1261)</label>
+      <label for="newEdId">ID del edificio (sin espacios ni acentos, ej: sanmartin450)</label>
       <input id="newEdId" type="text" autocomplete="off">
     </div>
     <div class="field">
@@ -300,6 +301,11 @@
       if(!adminSnap.exists || !adminSnap.data().edificioId){
         appScreen.hidden = true;
         onboardScreen.hidden = false;
+        // La migración de Rioja 1244 es un paso único, ya cumplido en cuanto ese
+        // edificio existe. Se oculta para que ningún admin nuevo se autoasigne
+        // por error a Rioja 1244 en vez de crear el suyo propio.
+        const riojaSnap = await db.collection('edificios').doc('rioja1244').get();
+        document.getElementById('migrateSection').hidden = riojaSnap.exists;
         return;
       }
       edificioId = adminSnap.data().edificioId;
