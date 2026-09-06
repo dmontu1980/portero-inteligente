@@ -208,6 +208,18 @@
   let floorDefs = [];    // [{piso,label,codigos,pisoOrden}] — viene de edificios/{id}.pisos
   let floorLookup = {};  // piso "plano" (sin °) -> {storedPiso,label,pisoOrden}
 
+  // El campo "pisos" del edificio puede ser un array nativo de Firestore
+  // (como lo escribe la migración) o, para cargarlo a mano en la consola sin
+  // tener que crear decenas de campos anidados, un string con el JSON del array.
+  function getPisosArray(ed){
+    if(Array.isArray(ed.pisos)) return ed.pisos;
+    if(typeof ed.pisos === 'string'){
+      try { return JSON.parse(ed.pisos); }
+      catch(e){ console.error('El campo "pisos" no es un JSON válido:', e); return []; }
+    }
+    return [];
+  }
+
   function setFloorDefs(pisos){
     floorDefs = (pisos||[]).map((f,i)=>({ piso:f.piso, label:f.label, codigos:f.codigos||[], pisoOrden:i*10 }));
     floorLookup = {};
@@ -266,7 +278,7 @@
       onboardScreen.hidden = true;
       appScreen.hidden = false;
       const ed = edSnap.data();
-      setFloorDefs(ed.pisos);
+      setFloorDefs(getPisosArray(ed));
       whoAmI.textContent = 'Conectado como ' + user.email;
       topBarTitle.textContent = 'Directorio — ' + (ed.nombre || edificioId);
       publicAppLink.href = './?edificio=' + encodeURIComponent(edificioId);
