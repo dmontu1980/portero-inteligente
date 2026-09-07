@@ -66,15 +66,44 @@
   .btn-ghost:hover{border-color:var(--border-strong);}
   .btn-danger{background:none; color:var(--danger); border:none; font-size:13px; padding:6px 8px;}
   .error-msg{font-size:13px; color:var(--danger); background:var(--danger-bg); border-radius:8px; padding:8px 10px;}
+  .success-msg{font-size:13px; color:var(--ok); background:color-mix(in srgb, var(--ok) 12%, transparent); border-radius:8px; padding:8px 10px;}
 
   /* ---- App shell ---- */
-  #appScreen{max-width:720px; margin:0 auto; padding:20px 16px 60px;}
+  #appScreen{max-width:960px; margin:0 auto; padding:20px 16px 60px;}
   .top-bar{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px;}
   .top-bar h1{font-size:18px;}
   .top-bar .addr{font-size:13px; font-weight:700; color:var(--text-muted); margin:2px 0 4px;}
   .top-bar .who{font-size:12px; color:var(--text-muted);}
-  .actions-row{display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap;}
   .status-msg{font-size:13px; color:var(--text-muted); margin-bottom:14px;}
+
+  /* ---- Menú lateral (agrupado por función, plegable) ---- */
+  .app-layout{display:flex; align-items:flex-start; gap:20px;}
+  .sidebar{width:230px; flex:none; display:flex; flex-direction:column; gap:8px;}
+  .menu-group{
+    border:1px solid var(--border); border-radius:10px; background:var(--surface);
+    overflow:hidden;
+  }
+  .menu-group-title{
+    width:100%; display:flex; align-items:center; justify-content:space-between;
+    padding:11px 12px; background:var(--surface-alt); border:none; cursor:pointer;
+    font-size:13px; font-weight:600; text-align:left; color:var(--text);
+  }
+  .menu-group-title .chev{color:var(--text-muted); transition:transform .15s ease; flex:none;}
+  .menu-group.open .menu-group-title .chev{transform:rotate(90deg);}
+  .menu-group-body{display:flex; flex-direction:column; padding:6px; gap:2px;}
+  .menu-group:not(.open) .menu-group-body{display:none;}
+  .menu-item{
+    display:block; width:100%; text-align:left; background:none; border:none;
+    padding:9px 10px; border-radius:8px; font-size:13.5px; cursor:pointer;
+    color:var(--text); text-decoration:none; font:inherit;
+  }
+  .menu-item:hover{background:var(--surface-alt);}
+  .content{flex:1; min-width:0;}
+
+  @media (max-width:720px){
+    .app-layout{flex-direction:column;}
+    .sidebar{width:100%;}
+  }
 
   .floor-section{margin-bottom:22px;}
   .floor-section h2{
@@ -194,20 +223,74 @@
       <div class="addr" id="topBarAddr" hidden></div>
       <div class="who" id="whoAmI"></div>
     </div>
-    <button class="btn btn-ghost" id="logoutBtn" type="button">Cerrar sesión</button>
   </div>
 
-  <div class="actions-row">
-    <button class="btn btn-ghost" id="seedBtn" type="button">Inicializar estructura del edificio</button>
-    <button class="btn btn-ghost" id="downloadTemplateBtn" type="button">Descargar planilla actual (CSV)</button>
-    <button class="btn btn-primary" id="importBtn" type="button">Importar planilla (CSV)</button>
-    <input type="file" id="importFile" accept=".csv,text/csv" hidden>
-    <a class="btn btn-ghost" id="publicAppLink" href="./" target="_blank" style="text-decoration:none; display:inline-flex; align-items:center;">Ver app pública ↗</a>
+  <div class="app-layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="menu-group" data-group="estructura">
+        <button class="menu-group-title" type="button">Estructura <span class="chev">›</span></button>
+        <div class="menu-group-body">
+          <button class="menu-item" id="seedBtn" type="button">Inicializar estructura del edificio</button>
+        </div>
+      </div>
+
+      <div class="menu-group" data-group="datos">
+        <button class="menu-group-title" type="button">Datos (CSV) <span class="chev">›</span></button>
+        <div class="menu-group-body">
+          <button class="menu-item" id="downloadTemplateBtn" type="button">Descargar planilla actual</button>
+          <button class="menu-item" id="importBtn" type="button">Importar planilla</button>
+          <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+        </div>
+      </div>
+
+      <div class="menu-group" data-group="enlaces">
+        <button class="menu-group-title" type="button">Enlaces <span class="chev">›</span></button>
+        <div class="menu-group-body">
+          <a class="menu-item" id="publicAppLink" href="./" target="_blank">Ver app pública ↗</a>
+        </div>
+      </div>
+
+      <div class="menu-group" data-group="cuenta">
+        <button class="menu-group-title" type="button">Cuenta <span class="chev">›</span></button>
+        <div class="menu-group-body">
+          <button class="menu-item" id="changePasswordBtn" type="button">Cambiar contraseña</button>
+          <button class="menu-item" id="logoutBtn" type="button">Cerrar sesión</button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="content">
+      <p class="status-msg" id="statusMsg"></p>
+      <div id="floors"></div>
+    </main>
   </div>
+</div>
 
-  <p class="status-msg" id="statusMsg"></p>
-
-  <div id="floors"></div>
+<div class="modal-backdrop" id="pwModalBackdrop">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-head">
+      <h2>Cambiar contraseña</h2>
+      <button class="btn-danger" id="pwModalClose" type="button" style="font-size:20px; line-height:1;">×</button>
+    </div>
+    <div class="field">
+      <label for="pwCurrent">Contraseña actual</label>
+      <input id="pwCurrent" type="password" autocomplete="current-password">
+    </div>
+    <div class="field">
+      <label for="pwNew">Contraseña nueva</label>
+      <input id="pwNew" type="password" autocomplete="new-password">
+    </div>
+    <div class="field">
+      <label for="pwNew2">Repetir contraseña nueva</label>
+      <input id="pwNew2" type="password" autocomplete="new-password">
+    </div>
+    <p class="error-msg" id="pwError" hidden></p>
+    <p class="success-msg" id="pwSuccess" hidden></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="pwCancel" type="button">Cancelar</button>
+      <button class="btn btn-primary" id="pwSave" type="button">Guardar contraseña</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-backdrop" id="modalBackdrop">
@@ -713,6 +796,84 @@
     }).catch(err=>{
       alert('No se pudo guardar: ' + err.message);
     });
+  });
+
+  // ---- Menú lateral: cada grupo se pliega/despliega por separado ----
+  document.querySelectorAll('.menu-group-title').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      btn.closest('.menu-group').classList.toggle('open');
+    });
+  });
+
+  // ---- Cambiar contraseña ----
+  const pwModalBackdrop = document.getElementById('pwModalBackdrop');
+  const pwCurrent = document.getElementById('pwCurrent');
+  const pwNew = document.getElementById('pwNew');
+  const pwNew2 = document.getElementById('pwNew2');
+  const pwError = document.getElementById('pwError');
+  const pwSuccess = document.getElementById('pwSuccess');
+
+  function openPwModal(){
+    pwCurrent.value = '';
+    pwNew.value = '';
+    pwNew2.value = '';
+    pwError.hidden = true;
+    pwSuccess.hidden = true;
+    pwModalBackdrop.classList.add('open');
+  }
+  function closePwModal(){ pwModalBackdrop.classList.remove('open'); }
+  document.getElementById('changePasswordBtn').addEventListener('click', openPwModal);
+  document.getElementById('pwModalClose').addEventListener('click', closePwModal);
+  document.getElementById('pwCancel').addEventListener('click', closePwModal);
+  pwModalBackdrop.addEventListener('click', e=>{ if(e.target===pwModalBackdrop) closePwModal(); });
+
+  document.getElementById('pwSave').addEventListener('click', async ()=>{
+    pwError.hidden = true;
+    pwSuccess.hidden = true;
+    const actual = pwCurrent.value;
+    const nueva = pwNew.value;
+    const nueva2 = pwNew2.value;
+
+    if(!actual || !nueva){
+      pwError.textContent = 'Completá la contraseña actual y la nueva.';
+      pwError.hidden = false;
+      return;
+    }
+    if(nueva.length < 6){
+      pwError.textContent = 'La contraseña nueva debe tener al menos 6 caracteres.';
+      pwError.hidden = false;
+      return;
+    }
+    if(nueva !== nueva2){
+      pwError.textContent = 'Las dos contraseñas nuevas no coinciden.';
+      pwError.hidden = false;
+      return;
+    }
+
+    const user = auth.currentUser;
+    if(!user) return;
+    try{
+      const cred = firebase.auth.EmailAuthProvider.credential(user.email, actual);
+      await user.reauthenticateWithCredential(cred);
+      await user.updatePassword(nueva);
+      pwSuccess.textContent = 'Contraseña actualizada correctamente.';
+      pwSuccess.hidden = false;
+      pwCurrent.value = '';
+      pwNew.value = '';
+      pwNew2.value = '';
+    } catch(err){
+      console.error(err);
+      if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials'){
+        pwError.textContent = 'La contraseña actual no es correcta.';
+      } else if(err.code === 'auth/weak-password'){
+        pwError.textContent = 'La contraseña nueva es demasiado débil (mínimo 6 caracteres).';
+      } else if(err.code === 'auth/too-many-requests'){
+        pwError.textContent = 'Demasiados intentos. Esperá un momento y volvé a probar.';
+      } else {
+        pwError.textContent = 'Error: ' + err.message;
+      }
+      pwError.hidden = false;
+    }
   });
 })();
 </script>
