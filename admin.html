@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Admin — Portero inteligente</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -160,6 +161,15 @@
     opacity:0; pointer-events:none; transition:opacity .15s ease; z-index:50;
   }
   .modal-backdrop.open{opacity:1; pointer-events:auto;}
+  #qrcode{display:flex; justify-content:center; padding:8px 0;}
+
+  @media print{
+    body *{visibility:hidden;}
+    #qrModalBackdrop, #qrModalBackdrop *{visibility:visible;}
+    #qrModalBackdrop{position:fixed; inset:0; background:#fff; opacity:1; pointer-events:auto;}
+    #qrModalBackdrop .modal{box-shadow:none; border:none; max-width:100%;}
+    #qrModalClose, #qrModalCancel, #printQrBtn, .qr-steps{display:none;}
+  }
   .modal{
     width:100%; max-width:420px; max-height:calc(100% - 12px); overflow-y:auto;
     background:var(--surface); border:1px solid var(--border); border-radius:16px;
@@ -327,6 +337,10 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             Ver app pública
           </a>
+          <button class="menu-item" id="showQrBtn" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="17.5" x2="21" y2="17.5"/></svg>
+            Ver / imprimir cartel QR
+          </button>
         </div>
       </div>
 
@@ -366,6 +380,22 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="qrModalBackdrop">
+  <div class="modal qr-card" style="max-width:340px; align-items:center; text-align:center;">
+    <div class="modal-head" style="width:100%;">
+      <h2>Cartel QR</h2>
+      <button class="btn-danger" id="qrModalClose" type="button" style="font-size:20px; line-height:1;">×</button>
+    </div>
+    <h3 id="qrBuildingName" style="margin:0; font-family:'Sora',sans-serif;"></h3>
+    <div id="qrcode"></div>
+    <p class="qr-steps" style="font-size:13px; color:var(--text-muted); margin:0;">Imprimí este cartel y pegalo en la entrada del edificio.</p>
+    <div class="modal-actions" style="width:100%;">
+      <button class="btn btn-ghost" id="qrModalCancel" type="button">Cerrar</button>
+      <button class="btn btn-primary" id="printQrBtn" type="button">Imprimir</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modalBackdrop">
   <div class="modal">
     <div class="modal-head">
@@ -398,6 +428,7 @@
 
   // ---- Estado del edificio del admin logueado (se arma dinámicamente) ----
   let edificioId = null;
+  let nombreEdificioActual = '';
   let edificioRef = null;
   let floorDefs = [];    // [{piso,label,codigos,pisoOrden}] — viene de edificios/{id}.pisos
   let floorLookup = {};  // piso "plano" (sin °) -> {storedPiso,label,pisoOrden}
@@ -488,6 +519,7 @@
         topBarAddr.hidden = true;
       }
       publicAppLink.href = './?edificio=' + encodeURIComponent(edificioId);
+      nombreEdificioActual = ed.nombre || edificioId;
       loadUnidades();
     } catch(err){
       console.error(err);
@@ -897,6 +929,29 @@
   });
   document.getElementById('changePasswordBtn').addEventListener('click', ()=>{ accountDropdown.hidden = true; });
   document.getElementById('logoutBtn').addEventListener('click', ()=>{ accountDropdown.hidden = true; });
+
+  // ---- Ver / imprimir cartel QR ----
+  const qrModalBackdrop = document.getElementById('qrModalBackdrop');
+  const qrBuildingNameEl = document.getElementById('qrBuildingName');
+  const qrDiv = document.getElementById('qrcode');
+  let qrBuilt = false;
+  document.getElementById('showQrBtn').addEventListener('click', ()=>{
+    qrBuildingNameEl.textContent = nombreEdificioActual || edificioId || '';
+    if(!qrBuilt){
+      new QRCode(qrDiv, {
+        text: publicAppLink.href,
+        width: 200,
+        height: 200
+      });
+      qrBuilt = true;
+    }
+    qrModalBackdrop.classList.add('open');
+  });
+  function closeQrModal(){ qrModalBackdrop.classList.remove('open'); }
+  document.getElementById('qrModalClose').addEventListener('click', closeQrModal);
+  document.getElementById('qrModalCancel').addEventListener('click', closeQrModal);
+  qrModalBackdrop.addEventListener('click', e=>{ if(e.target===qrModalBackdrop) closeQrModal(); });
+  document.getElementById('printQrBtn').addEventListener('click', ()=>{ window.print(); });
 
   // ---- Cambiar contraseña ----
   const pwModalBackdrop = document.getElementById('pwModalBackdrop');
