@@ -485,7 +485,7 @@
     <p class="success-msg" id="addAdminSuccess" hidden></p>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="addAdminCancel" type="button">Cancelar</button>
-      <button class="btn btn-primary" id="addAdminSave" type="button">Crear administrador</button>
+      <button class="btn btn-primary" id="addAdminSave" type="button">Crear usuario</button>
     </div>
   </div>
 </div>
@@ -1293,7 +1293,7 @@
       usuariosActuales[targetUid] = email;
       addAdminSuccess.textContent = yaExistia
         ? 'Listo. Esa cuenta ya podía iniciar sesión y ahora también administra este edificio.'
-        : 'Administrador creado. Ya puede iniciar sesión con ese email y contraseña.';
+        : 'Usuario creado. Ya puede iniciar sesión con ese email y contraseña.';
       addAdminSuccess.hidden = false;
       newAdminEmail.value = '';
       newAdminPass.value = '';
