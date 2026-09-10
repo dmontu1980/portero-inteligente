@@ -1000,23 +1000,33 @@
   });
 
   // ---- Descargar planilla CSV con los contactos ya guardados (una fila por contacto) ----
-  document.getElementById('downloadTemplateBtn').addEventListener('click', ()=>{
-    const lines = ['piso,codigo,whatsapp,telefono'];
-    floorDefs.forEach(f=>{
-      const plainPiso = f.piso.replace('°','');
-      f.codigos.forEach(codigo=>{
-        const id = docId(f.piso, codigo);
-        const data = unidadesCache[id];
-        const contactos = (data && Array.isArray(data.contactos)) ? data.contactos : [];
-        if(contactos.length === 0){
-          lines.push([plainPiso, codigo, '', ''].join(','));
-        } else {
-          contactos.forEach(c=>{
-            lines.push([plainPiso, codigo, c.whatsapp||'', c.telefono||''].join(','));
-          });
+  document.getElementById('downloadTemplateBtn').addEventListener('click', async ()=>{
+    const statusMsg = document.getElementById('statusMsg');
+    statusMsg.textContent = 'Preparando planilla…';
+    const lines = ['piso,codigo,nombre,whatsapp,telefono'];
+    try{
+      for(const f of floorDefs){
+        const plainPiso = f.piso.replace('°','');
+        for(const codigo of f.codigos){
+          const id = docId(f.piso, codigo);
+          const data = unidadesCache[id];
+          const contactos = (data && Array.isArray(data.contactos)) ? data.contactos : [];
+          if(contactos.length === 0){
+            lines.push([plainPiso, codigo, '', '', ''].join(','));
+          } else {
+            const nombresSnap = await nombresRef(id).get();
+            const nombres = (nombresSnap.exists && Array.isArray(nombresSnap.data().lista)) ? nombresSnap.data().lista : [];
+            contactos.forEach((c, i)=>{
+              lines.push([plainPiso, codigo, nombres[i]||'', c.whatsapp||'', c.telefono||''].join(','));
+            });
+          }
         }
-      });
-    });
+      }
+    } catch(err){
+      statusMsg.textContent = 'Error al preparar la planilla: ' + err.message;
+      return;
+    }
+    statusMsg.textContent = '';
     const blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1047,18 +1057,28 @@
     reader.onload = async ()=>{
       const statusMsg = document.getElementById('statusMsg');
       const rows = parseCSV(reader.result);
-      rows.shift(); // saca el encabezado
+      const encabezado = rows.shift(); // saca el encabezado
+      // Compatibilidad: planillas viejas no tienen columna "nombre"
+      // (piso,codigo,whatsapp,telefono). Si no la vemos en el encabezado,
+      // la tratamos como ausente y listo.
+      const tieneNombre = encabezado && encabezado.map(h=>h.toLowerCase()).includes('nombre');
 
-      const grupos = {}; // "piso|codigo" -> { piso, codigo, contactos:[] }
+      const grupos = {}; // "piso|codigo" -> { piso, codigo, contactos:[], nombres:[] }
       const pisosDesconocidos = new Set();
 
       rows.forEach(cols=>{
-        const [piso, codigo, whatsapp, telefono] = cols;
+        const [piso, codigo, c3, c4, c5] = cols;
+        const nombre = tieneNombre ? c3 : '';
+        const whatsapp = tieneNombre ? c4 : c3;
+        const telefono = tieneNombre ? c5 : c4;
         if(!piso) return; // fila vacía o mal formada
         if(!floorLookup[piso]){ pisosDesconocidos.add(piso); return; }
         const key = piso + '|' + (codigo||'');
-        if(!grupos[key]) grupos[key] = { piso, codigo:codigo||'', contactos:[] };
-        if(whatsapp || telefono) grupos[key].contactos.push({ whatsapp:whatsapp||'', telefono:telefono||'' });
+        if(!grupos[key]) grupos[key] = { piso, codigo:codigo||'', contactos:[], nombres:[] };
+        if(whatsapp || telefono || nombre){
+          grupos[key].contactos.push({ whatsapp:whatsapp||'', telefono:telefono||'' });
+          grupos[key].nombres.push(nombre||'');
+        }
       });
 
       const claves = Object.keys(grupos);
@@ -1087,6 +1107,9 @@
           codigo: g.codigo,
           contactos: g.contactos,
         }, { merge:true });
+        // Los nombres van aparte, en la subcolección privada (no la lee la
+        // app de visitantes, solo queda accesible para administración).
+        batch.set(ref.collection('privado').doc('nombres'), { lista: g.nombres });
       });
       try{
         await batch.commit();
@@ -1156,12 +1179,22 @@
   const contactosWrap = document.getElementById('contactosWrap');
   let editingId = null;
 
-  function contactoRow(c){
+  // El nombre del contacto se guarda aparte, en una subcolección privada
+  // (edificios/{id}/unidades/{id}/privado/nombres, campo "lista"), que las
+  // reglas de Firestore solo dejan leer/escribir a un admin de ese edificio.
+  // "lista" es un array alineado por posición con "contactos" (mismo orden,
+  // mismo largo) — por eso siempre se guardan los dos juntos.
+  function nombresRef(unidadId){
+    return edificioRef.collection('unidades').doc(unidadId).collection('privado').doc('nombres');
+  }
+
+  function contactoRow(c, nombre){
     c = c || { whatsapp:'', telefono:'' };
     const row = document.createElement('div');
     row.className = 'contact-row';
     row.innerHTML =
       '<div class="fields">' +
+        '<div class="field"><label>Nombre (solo lo ve la administración)</label><input type="text" class="in-nombre" value="'+(nombre||'')+'"></div>' +
         '<div class="field"><label>WhatsApp (ej: 5491122334455)</label><input type="text" class="in-whatsapp" value="'+(c.whatsapp||'')+'"></div>' +
         '<div class="field"><label>Teléfono (ej: +5491122334455)</label><input type="text" class="in-telefono" value="'+(c.telefono||'')+'"></div>' +
       '</div>' +
@@ -1170,18 +1203,26 @@
     return row;
   }
 
-  function openModal(id, piso, codigo){
+  async function openModal(id, piso, codigo){
     editingId = id;
     modalTitle.textContent = 'Piso ' + piso + (codigo ? ' · Depto ' + codigo : '');
-    contactosWrap.innerHTML = '';
+    contactosWrap.innerHTML = '<p class="status-msg">Cargando…</p>';
+    modalBackdrop.classList.add('open');
     const data = unidadesCache[id];
     const contactos = (data && data.contactos) || [];
+    let nombres = [];
+    try{
+      const nombresSnap = await nombresRef(id).get();
+      nombres = (nombresSnap.exists && Array.isArray(nombresSnap.data().lista)) ? nombresSnap.data().lista : [];
+    } catch(err){
+      console.error('No se pudieron cargar los nombres:', err);
+    }
+    contactosWrap.innerHTML = '';
     if(contactos.length===0){
       contactosWrap.appendChild(contactoRow());
     } else {
-      contactos.forEach(c=>contactosWrap.appendChild(contactoRow(c)));
+      contactos.forEach((c, i)=>contactosWrap.appendChild(contactoRow(c, nombres[i])));
     }
-    modalBackdrop.classList.add('open');
   }
   function closeModal(){ modalBackdrop.classList.remove('open'); editingId=null; }
   document.getElementById('modalClose').addEventListener('click', closeModal);
@@ -1189,19 +1230,32 @@
   modalBackdrop.addEventListener('click', e=>{ if(e.target===modalBackdrop) closeModal(); });
   document.getElementById('addContactoBtn').addEventListener('click', ()=>contactosWrap.appendChild(contactoRow()));
 
-  document.getElementById('modalSave').addEventListener('click', ()=>{
+  document.getElementById('modalSave').addEventListener('click', async ()=>{
     const contactos = [];
+    const nombres = [];
     contactosWrap.querySelectorAll('.contact-row').forEach(row=>{
+      const nombre = row.querySelector('.in-nombre').value.trim();
       const whatsapp = row.querySelector('.in-whatsapp').value.trim();
       const telefono = row.querySelector('.in-telefono').value.trim();
-      if(whatsapp || telefono) contactos.push({ whatsapp, telefono });
+      if(whatsapp || telefono || nombre){
+        contactos.push({ whatsapp, telefono });
+        nombres.push(nombre);
+      }
     });
-    edificioRef.collection('unidades').doc(editingId).update({ contactos }).then(()=>{
+    const saveBtn = document.getElementById('modalSave');
+    saveBtn.disabled = true;
+    try{
+      await Promise.all([
+        edificioRef.collection('unidades').doc(editingId).update({ contactos }),
+        nombresRef(editingId).set({ lista: nombres })
+      ]);
       closeModal();
       loadUnidades();
-    }).catch(err=>{
+    } catch(err){
       alert('No se pudo guardar: ' + err.message);
-    });
+    } finally {
+      saveBtn.disabled = false;
+    }
   });
 
   // ---- Menú lateral: cada grupo se pliega/despliega por separado ----
