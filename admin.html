@@ -371,18 +371,26 @@
         </div>
       </div>
 
-      <div class="menu-group" data-group="administradores">
+      <div class="menu-group" data-group="usuarios" id="usuariosGroup" hidden>
         <button class="menu-group-title" type="button">
           <span class="label">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
-            Administradores
+            Usuarios
           </span>
           <span class="chev">›</span>
         </button>
         <div class="menu-group-body">
-          <button class="menu-item" id="addAdminBtn" type="button">
+          <button class="menu-item" id="claimOwnerBtn" type="button" hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Reclamar propiedad de este edificio
+          </button>
+          <button class="menu-item" id="listUsersBtn" type="button" hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            Ver usuarios
+          </button>
+          <button class="menu-item" id="addAdminBtn" type="button" hidden>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
-            Agregar administrador
+            Agregar usuario
           </button>
         </div>
       </div>
@@ -441,10 +449,23 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="usersModalBackdrop">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-head">
+      <h2>Usuarios con acceso</h2>
+      <button class="btn-danger" id="usersModalClose" type="button" style="font-size:20px; line-height:1;">×</button>
+    </div>
+    <div id="usersList" style="display:flex; flex-direction:column; gap:8px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="usersModalCancel" type="button">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="addAdminModalBackdrop">
   <div class="modal" style="max-width:360px;">
     <div class="modal-head">
-      <h2>Agregar administrador</h2>
+      <h2>Agregar usuario</h2>
       <button class="btn-danger" id="addAdminModalClose" type="button" style="font-size:20px; line-height:1;">×</button>
     </div>
     <p style="font-size:13px; color:var(--text-muted); margin:0;">Si el email es nuevo, se crea una cuenta con esta contraseña. Si ya tiene una cuenta (por ejemplo, porque administra otro edificio), poné su contraseña actual: se verifica y se le suma este edificio, sin crear una cuenta nueva ni sacarle el acceso al otro.</p>
@@ -502,6 +523,8 @@
   // ---- Estado del edificio del admin logueado (se arma dinámicamente) ----
   let edificioId = null;
   let nombreEdificioActual = '';
+  let propietarioUidActual = null;
+  let usuariosActuales = {};
   let edificioRef = null;
   let floorDefs = [];    // [{piso,label,codigos,pisoOrden}] — viene de edificios/{id}.pisos
   let floorLookup = {};  // piso "plano" (sin °) -> {storedPiso,label,pisoOrden}
@@ -587,8 +610,106 @@
     }
     publicAppLink.href = './?edificio=' + encodeURIComponent(id);
     nombreEdificioActual = ed.nombre || id;
+    propietarioUidActual = ed.propietarioUid || null;
+    usuariosActuales = ed.usuarios || {};
+    updateUsuariosMenuVisibility();
     loadUnidades();
   }
+
+  // ---- Usuarios: solo el propietario del edificio puede agregar/quitar ----
+  function updateUsuariosMenuVisibility(){
+    const grupo = document.getElementById('usuariosGroup');
+    const claimBtn = document.getElementById('claimOwnerBtn');
+    const addBtn = document.getElementById('addAdminBtn');
+    const listBtn = document.getElementById('listUsersBtn');
+    const esOwner = propietarioUidActual && auth.currentUser && propietarioUidActual === auth.currentUser.uid;
+    if(!propietarioUidActual){
+      grupo.hidden = false;
+      claimBtn.hidden = false;
+      addBtn.hidden = true;
+      listBtn.hidden = true;
+    } else if(esOwner){
+      grupo.hidden = false;
+      claimBtn.hidden = true;
+      addBtn.hidden = false;
+      listBtn.hidden = false;
+    } else {
+      grupo.hidden = true;
+    }
+  }
+
+  document.getElementById('claimOwnerBtn').addEventListener('click', async ()=>{
+    if(!confirm('Vas a quedar como el único usuario que puede agregar o quitar administradores de este edificio. ¿Confirmar?')) return;
+    try{
+      const upd = { propietarioUid: auth.currentUser.uid };
+      upd['usuarios.' + auth.currentUser.uid] = auth.currentUser.email;
+      await edificioRef.update(upd);
+      propietarioUidActual = auth.currentUser.uid;
+      usuariosActuales[auth.currentUser.uid] = auth.currentUser.email;
+      updateUsuariosMenuVisibility();
+    } catch(err){
+      console.error(err);
+      alert('No se pudo reclamar la propiedad: ' + err.message);
+    }
+  });
+
+  function renderUsersList(){
+    const wrap = document.getElementById('usersList');
+    wrap.innerHTML = '';
+    const entries = Object.entries(usuariosActuales);
+    if(entries.length === 0){
+      wrap.innerHTML = '<p style="font-size:13px; color:var(--text-muted); margin:0;">Todavía no hay usuarios en esta lista (solo se ven los que se agregaron desde acá).</p>';
+      return;
+    }
+    entries.forEach(([uid, email])=>{
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px;';
+      const span = document.createElement('span');
+      span.style.cssText = 'font-size:13.5px; word-break:break-all;';
+      span.textContent = email + (uid === propietarioUidActual ? ' (propietario)' : '');
+      row.appendChild(span);
+      if(uid !== auth.currentUser.uid){
+        const btn = document.createElement('button');
+        btn.className = 'btn-danger';
+        btn.type = 'button';
+        btn.textContent = 'Eliminar';
+        btn.addEventListener('click', ()=>eliminarUsuario(uid));
+        row.appendChild(btn);
+      }
+      wrap.appendChild(row);
+    });
+  }
+
+  async function eliminarUsuario(uid){
+    if(!confirm('¿Sacarle a este usuario el acceso a este edificio?')) return;
+    try{
+      await db.collection('admins').doc(uid).update({
+        edificioIds: firebase.firestore.FieldValue.arrayRemove(edificioId)
+      });
+      const upd = {};
+      upd['usuarios.' + uid] = firebase.firestore.FieldValue.delete();
+      await edificioRef.update(upd);
+      delete usuariosActuales[uid];
+      renderUsersList();
+    } catch(err){
+      console.error(err);
+      alert('No se pudo eliminar: ' + err.message);
+    }
+  }
+
+  document.getElementById('listUsersBtn').addEventListener('click', ()=>{
+    renderUsersList();
+    document.getElementById('usersModalBackdrop').classList.add('open');
+  });
+  document.getElementById('usersModalClose').addEventListener('click', ()=>{
+    document.getElementById('usersModalBackdrop').classList.remove('open');
+  });
+  document.getElementById('usersModalCancel').addEventListener('click', ()=>{
+    document.getElementById('usersModalBackdrop').classList.remove('open');
+  });
+  document.getElementById('usersModalBackdrop').addEventListener('click', e=>{
+    if(e.target === document.getElementById('usersModalBackdrop')) document.getElementById('usersModalBackdrop').classList.remove('open');
+  });
 
   // Pantalla "Elegí un edificio", para admins que administran más de uno.
   async function showPicker(ids){
@@ -670,10 +791,14 @@
       await db.collection('admins').doc(user.uid).set({ edificioIds: ['rioja1244'] });
 
       // 2) Datos del edificio (nombre y estructura de pisos/unidades)
+      const usuariosInicial = {};
+      usuariosInicial[user.uid] = user.email;
       await db.collection('edificios').doc('rioja1244').set({
         nombre: 'Rioja 1244 - Edificio Chicago I',
         direccion: '',
         pisos: RIOJA_PISOS,
+        propietarioUid: user.uid,
+        usuarios: usuariosInicial,
       }, { merge:true });
 
       // 3) Copiar las unidades de la colección vieja a la subcolección nueva
@@ -789,8 +914,15 @@
 
       // 1) Autoasignación (permitida una sola vez por las reglas de seguridad)
       await db.collection('admins').doc(user.uid).set({ edificioIds: [id] });
-      // 2) Datos del edificio
-      await db.collection('edificios').doc(id).set({ nombre, direccion, pisos });
+      // 2) Datos del edificio (quedás como propietario: sos el único que va
+      // a poder agregar o quitar otros usuarios de este edificio)
+      const usuariosInicial = {};
+      usuariosInicial[user.uid] = user.email;
+      await db.collection('edificios').doc(id).set({
+        nombre, direccion, pisos,
+        propietarioUid: user.uid,
+        usuarios: usuariosInicial,
+      });
 
       alert('Edificio creado. Recargando el panel…');
       window.location.reload();
@@ -1155,6 +1287,10 @@
       await db.collection('admins').doc(targetUid).set({
         edificioIds: firebase.firestore.FieldValue.arrayUnion(edificioId)
       }, { merge:true });
+      const updUsuarios = {};
+      updUsuarios['usuarios.' + targetUid] = email;
+      await edificioRef.update(updUsuarios);
+      usuariosActuales[targetUid] = email;
       addAdminSuccess.textContent = yaExistia
         ? 'Listo. Esa cuenta ya podía iniciar sesión y ahora también administra este edificio.'
         : 'Administrador creado. Ya puede iniciar sesión con ese email y contraseña.';
