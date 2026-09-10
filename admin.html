@@ -269,6 +269,17 @@
   </div>
 </div>
 
+<div id="pickerScreen" hidden>
+  <div class="login-card" style="max-width:420px; margin:40px auto;">
+    <div>
+      <h1>Elegí un edificio</h1>
+      <div class="sub">Tu usuario administra más de uno.</div>
+    </div>
+    <div id="pickerList" style="display:flex; flex-direction:column; gap:8px;"></div>
+    <button class="btn btn-ghost" id="logoutBtnPicker" type="button">Cerrar sesión</button>
+  </div>
+</div>
+
 <div id="appScreen" hidden>
   <div class="page-grid" id="pageGrid">
     <div class="header-cell">
@@ -282,6 +293,10 @@
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>
         </button>
         <div class="account-dropdown" id="accountDropdown" hidden>
+          <button class="menu-item" id="switchEdificioBtn" type="button" hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V10l8-6 8 6v11"/><path d="M9 21v-6h6v6"/></svg>
+            Cambiar de edificio
+          </button>
           <button class="menu-item" id="changePasswordBtn" type="button">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
             Cambiar contraseña
@@ -432,7 +447,7 @@
       <h2>Agregar administrador</h2>
       <button class="btn-danger" id="addAdminModalClose" type="button" style="font-size:20px; line-height:1;">×</button>
     </div>
-    <p style="font-size:13px; color:var(--text-muted); margin:0;">Va a poder iniciar sesión en este mismo panel para administrar este edificio.</p>
+    <p style="font-size:13px; color:var(--text-muted); margin:0;">Si el email es nuevo, se crea una cuenta con esta contraseña. Si ya tiene una cuenta (por ejemplo, porque administra otro edificio), poné su contraseña actual: se verifica y se le suma este edificio, sin crear una cuenta nueva ni sacarle el acceso al otro.</p>
     <div class="field">
       <label for="newAdminEmail">Email</label>
       <input id="newAdminEmail" type="email" autocomplete="off">
@@ -513,6 +528,7 @@
   const loginScreen = document.getElementById('loginScreen');
   const appScreen = document.getElementById('appScreen');
   const onboardScreen = document.getElementById('onboardScreen');
+  const pickerScreen = document.getElementById('pickerScreen');
   const loginForm = document.getElementById('loginForm');
   const loginError = document.getElementById('loginError');
   const whoAmI = document.getElementById('whoAmI');
@@ -531,20 +547,95 @@
   });
   document.getElementById('logoutBtn').addEventListener('click', ()=>auth.signOut());
   document.getElementById('logoutBtnOnboard').addEventListener('click', ()=>auth.signOut());
+  document.getElementById('logoutBtnPicker').addEventListener('click', ()=>auth.signOut());
+
+  // Un admin puede tener el campo "edificioIds" (array, formato actual) y/o
+  // el viejo campo "edificioId" (string, cuentas creadas antes de soportar
+  // varios edificios por admin). Se combinan para no perder acceso a nadie.
+  function getEdificioIdsFromAdminDoc(data){
+    const fromArray = Array.isArray(data.edificioIds) ? data.edificioIds : [];
+    const fromLegacy = data.edificioId ? [data.edificioId] : [];
+    return Array.from(new Set([...fromArray, ...fromLegacy]));
+  }
+
+  // Muestra el panel de un edificio puntual (entre los que administra el usuario logueado).
+  async function enterEdificio(id){
+    edificioId = id;
+    edificioRef = db.collection('edificios').doc(id);
+    const edSnap = await edificioRef.get();
+    if(!edSnap.exists){
+      appScreen.hidden = true;
+      pickerScreen.hidden = true;
+      onboardScreen.hidden = false;
+      document.getElementById('onboardMsg').textContent = 'Tu usuario está asignado al edificio "' + id + '" pero no encontramos sus datos. Avisá al administrador del sistema.';
+      document.getElementById('migrateBtn').hidden = true;
+      return;
+    }
+    pickerScreen.hidden = true;
+    onboardScreen.hidden = true;
+    appScreen.hidden = false;
+    const ed = edSnap.data();
+    setFloorDefs(getPisosArray(ed));
+    whoAmI.textContent = 'Conectado como ' + auth.currentUser.email;
+    topBarTitle.textContent = 'Directorio — ' + (ed.nombre || id);
+    const topBarAddr = document.getElementById('topBarAddr');
+    if(ed.direccion){
+      topBarAddr.textContent = ed.direccion;
+      topBarAddr.hidden = false;
+    } else {
+      topBarAddr.hidden = true;
+    }
+    publicAppLink.href = './?edificio=' + encodeURIComponent(id);
+    nombreEdificioActual = ed.nombre || id;
+    loadUnidades();
+  }
+
+  // Pantalla "Elegí un edificio", para admins que administran más de uno.
+  async function showPicker(ids){
+    appScreen.hidden = true;
+    onboardScreen.hidden = true;
+    pickerScreen.hidden = false;
+    const list = document.getElementById('pickerList');
+    list.innerHTML = 'Cargando…';
+    const snaps = await Promise.all(ids.map(id=>db.collection('edificios').doc(id).get()));
+    list.innerHTML = '';
+    snaps.forEach((snap, i)=>{
+      const id = ids[i];
+      const nombre = snap.exists ? (snap.data().nombre || id) : id;
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-ghost';
+      btn.type = 'button';
+      btn.style.textAlign = 'left';
+      btn.textContent = nombre;
+      btn.addEventListener('click', ()=>enterEdificio(id));
+      list.appendChild(btn);
+    });
+  }
+
+  document.getElementById('switchEdificioBtn').addEventListener('click', async ()=>{
+    document.getElementById('accountDropdown').hidden = true;
+    const adminSnap = await db.collection('admins').doc(auth.currentUser.uid).get();
+    showPicker(getEdificioIdsFromAdminDoc(adminSnap.data()));
+  });
 
   auth.onAuthStateChanged(async user=>{
     if(!user){
       loginScreen.hidden = false;
       appScreen.hidden = true;
       onboardScreen.hidden = true;
+      pickerScreen.hidden = true;
       return;
     }
     loginScreen.hidden = true;
     document.getElementById('onboardWho').textContent = 'Conectado como ' + user.email;
     try{
       const adminSnap = await db.collection('admins').doc(user.uid).get();
-      if(!adminSnap.exists || !adminSnap.data().edificioId){
+      const misEdificios = adminSnap.exists ? getEdificioIdsFromAdminDoc(adminSnap.data()) : [];
+      document.getElementById('switchEdificioBtn').hidden = misEdificios.length <= 1;
+
+      if(misEdificios.length === 0){
         appScreen.hidden = true;
+        pickerScreen.hidden = true;
         onboardScreen.hidden = false;
         // La migración de Rioja 1244 es un paso único, ya cumplido en cuanto ese
         // edificio existe. Se oculta para que ningún admin nuevo se autoasigne
@@ -553,35 +644,15 @@
         document.getElementById('migrateSection').hidden = riojaSnap.exists;
         return;
       }
-      edificioId = adminSnap.data().edificioId;
-      edificioRef = db.collection('edificios').doc(edificioId);
-      const edSnap = await edificioRef.get();
-      if(!edSnap.exists){
-        appScreen.hidden = true;
-        onboardScreen.hidden = false;
-        document.getElementById('onboardMsg').textContent = 'Tu usuario está asignado al edificio "' + edificioId + '" pero no encontramos sus datos. Avisá al administrador del sistema.';
-        document.getElementById('migrateBtn').hidden = true;
-        return;
-      }
-      onboardScreen.hidden = true;
-      appScreen.hidden = false;
-      const ed = edSnap.data();
-      setFloorDefs(getPisosArray(ed));
-      whoAmI.textContent = 'Conectado como ' + user.email;
-      topBarTitle.textContent = 'Directorio — ' + (ed.nombre || edificioId);
-      const topBarAddr = document.getElementById('topBarAddr');
-      if(ed.direccion){
-        topBarAddr.textContent = ed.direccion;
-        topBarAddr.hidden = false;
+      if(misEdificios.length === 1){
+        await enterEdificio(misEdificios[0]);
       } else {
-        topBarAddr.hidden = true;
+        await showPicker(misEdificios);
       }
-      publicAppLink.href = './?edificio=' + encodeURIComponent(edificioId);
-      nombreEdificioActual = ed.nombre || edificioId;
-      loadUnidades();
     } catch(err){
       console.error(err);
       appScreen.hidden = true;
+      pickerScreen.hidden = true;
       onboardScreen.hidden = false;
       document.getElementById('onboardMsg').textContent = 'Error: ' + err.message;
     }
@@ -596,7 +667,7 @@
     msgEl.textContent = 'Migrando…';
     try{
       // 1) Autoasignación (permitida una sola vez por las reglas de seguridad)
-      await db.collection('admins').doc(user.uid).set({ edificioId: 'rioja1244' });
+      await db.collection('admins').doc(user.uid).set({ edificioIds: ['rioja1244'] });
 
       // 2) Datos del edificio (nombre y estructura de pisos/unidades)
       await db.collection('edificios').doc('rioja1244').set({
@@ -717,7 +788,7 @@
       if(!confirm('Se va a crear el edificio "' + nombre + '" (' + id + ') con ' + pisos.length + ' pisos, y vas a quedar asignado como su administrador. ¿Confirmar?')) return;
 
       // 1) Autoasignación (permitida una sola vez por las reglas de seguridad)
-      await db.collection('admins').doc(user.uid).set({ edificioId: id });
+      await db.collection('admins').doc(user.uid).set({ edificioIds: [id] });
       // 2) Datos del edificio
       await db.collection('edificios').doc(id).set({ nombre, direccion, pisos });
 
@@ -1058,28 +1129,49 @@
 
     const saveBtn = document.getElementById('addAdminSave');
     saveBtn.disabled = true;
-    // Se crea el usuario en una instancia secundaria de Firebase para no
-    // cerrar la sesión del admin actual (crear un usuario inicia sesión
-    // automáticamente con ese usuario nuevo si se hace en la instancia principal).
+    // Se opera en una instancia secundaria de Firebase para no cerrar la
+    // sesión del admin actual (crear o iniciar sesión con otro usuario en
+    // la instancia principal lo reemplazaría a él como usuario logueado).
     const secondaryApp = firebase.initializeApp(firebaseConfig, 'Secondary-' + Date.now());
     try{
-      const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, pass);
-      const newUid = cred.user.uid;
+      let targetUid;
+      let yaExistia = false;
+      try{
+        const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, pass);
+        targetUid = cred.user.uid;
+      } catch(createErr){
+        if(createErr.code === 'auth/email-already-in-use'){
+          // Ya existe una cuenta con ese email: se verifica con la contraseña
+          // ingresada (es la única forma de confirmar que es esa cuenta) y,
+          // si coincide, se le suma este edificio en vez de crear una cuenta nueva.
+          const cred = await secondaryApp.auth().signInWithEmailAndPassword(email, pass);
+          targetUid = cred.user.uid;
+          yaExistia = true;
+        } else {
+          throw createErr;
+        }
+      }
       await secondaryApp.auth().signOut();
-      await db.collection('admins').doc(newUid).set({ edificioId: edificioId });
-      addAdminSuccess.textContent = 'Administrador creado. Ya puede iniciar sesión con ese email y contraseña.';
+      await db.collection('admins').doc(targetUid).set({
+        edificioIds: firebase.firestore.FieldValue.arrayUnion(edificioId)
+      }, { merge:true });
+      addAdminSuccess.textContent = yaExistia
+        ? 'Listo. Esa cuenta ya podía iniciar sesión y ahora también administra este edificio.'
+        : 'Administrador creado. Ya puede iniciar sesión con ese email y contraseña.';
       addAdminSuccess.hidden = false;
       newAdminEmail.value = '';
       newAdminPass.value = '';
       newAdminPass2.value = '';
     } catch(err){
       console.error(err);
-      if(err.code === 'auth/email-already-in-use'){
-        addAdminError.textContent = 'Ya existe una cuenta con ese email.';
+      if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials'){
+        addAdminError.textContent = 'Ya existe una cuenta con ese email, pero la contraseña ingresada no es la de esa cuenta. Pedile la contraseña correcta a esa persona (no hay forma de resetearla desde acá).';
       } else if(err.code === 'auth/invalid-email'){
         addAdminError.textContent = 'El email no es válido.';
       } else if(err.code === 'auth/weak-password'){
         addAdminError.textContent = 'La contraseña es demasiado débil (mínimo 6 caracteres).';
+      } else if(err.code === 'auth/too-many-requests'){
+        addAdminError.textContent = 'Demasiados intentos. Esperá un momento y probá de nuevo.';
       } else if(err.code === 'permission-denied'){
         addAdminError.textContent = 'No se pudo asociar el usuario al edificio (permisos). Verificá que las reglas de Firestore estén actualizadas.';
       } else {
